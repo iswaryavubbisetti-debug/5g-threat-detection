@@ -46,7 +46,7 @@ def setup_dataset():
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
     
-    filename = "UNSW-NB15_1.csv"   # Your actual file name
+    filename = "UNSW-NB15_small.csv"   # Use the smaller file
     filepath = os.path.join(data_dir, filename)
 
     # If file already exists, use it
