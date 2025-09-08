@@ -60,28 +60,28 @@ def setup_dataset():
 # Load data function with download capability
 @st.cache_data
 def load_real_data():
-    # Setup dataset (download if needed)
     dataset_paths = setup_dataset()
-    
+
     if dataset_paths is None:
-        st.warning("Using synthetic data for demonstration. Click 'Retry Download' to try again.")
+        st.error("❌ Dataset not found. Please put UNSW-NB15_1.csv inside the 'data' folder.")
         return create_synthetic_data()
-    
+
     try:
-        # Load training data
+        # Load training data (local file only)
         data = pd.read_csv(dataset_paths["training"])
-        
-        # Check if this is the real dataset or if we need to use synthetic
-        if data.shape[0] < 100:  # If the file is too small, it might be corrupted
-            st.warning("Downloaded file seems too small. Using synthetic data instead.")
-            return create_synthetic_data()
-            
+
+        # If dataset doesn’t have a 'label' column but has 'attack_cat', create one
+        if 'label' not in data.columns and 'attack_cat' in data.columns:
+            data['label'] = data['attack_cat'].apply(lambda x: 0 if x == 'Normal' else 1)
+
+        # Features = all except label
         features = data.columns.drop('label') if 'label' in data.columns else data.columns
         return data, features
+
     except Exception as e:
-        st.error(f"Error loading dataset: {str(e)}")
-        # Fall back to synthetic data if real data fails
+        st.error(f"❌ Error loading dataset: {str(e)}")
         return create_synthetic_data()
+
 # Fallback function if real data isn't available
 def create_synthetic_data():
     st.warning("Using synthetic data for demonstration. Real dataset will be used when available.")
