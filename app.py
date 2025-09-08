@@ -41,45 +41,65 @@ except ImportError:
     st.error("Plotly is not installed. Please install it with: pip install plotly")
 
 # ===== DATASET DOWNLOAD FUNCTION =====
-# ===== DATASET SETUP FUNCTION =====
-# ===== DATASET SETUP FUNCTION =====
 def setup_dataset():
     data_dir = "data"
-    filename = "UNSW-NB15_1.csv"   # your actual file name
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+    
+    filename = "UNSW-NB15_1.csv"   # Your actual file name
     filepath = os.path.join(data_dir, filename)
 
-    if not os.path.exists(filepath):
-        st.error(f"Dataset file not found at {filepath}. Please put UNSW-NB15_1.csv inside the 'data' folder.")
+    # If file already exists, use it
+    if os.path.exists(filepath):
+        return {"training": filepath}
+    
+    # If file doesn't exist, try to download it
+    try:
+        with st.spinner('Downloading dataset... This may take a few minutes.'):
+            # Use a reliable URL
+            dataset_url = "https://github.com/tawabshakeel/UNSW-NB15/raw/master/UNSW-NB15_1.csv"
+            response = requests.get(dataset_url)
+            response.raise_for_status()  # Check for HTTP errors
+            
+            with open(filepath, 'wb') as f:
+                f.write(response.content)
+            st.success("Downloaded dataset successfully!")
+            return {"training": filepath}
+            
+    except Exception as e:
+        st.error(f"Error downloading dataset: {str(e)}")
+        st.info("Please make sure UNSW-NB15_1.csv is in the 'data' folder.")
         return None
-
-    # Just return the local dataset path (no download)
-    return {"training": filepath}
-
-
 
 # Load data function with download capability
 @st.cache_data
 def load_real_data():
+    # Setup dataset (check if available)
     dataset_paths = setup_dataset()
-
+    
     if dataset_paths is None:
-        st.error("❌ Dataset not found. Please put UNSW-NB15_1.csv inside the 'data' folder.")
+        st.warning("Using synthetic data for demonstration. Place UNSW-NB15_1.csv in the 'data' folder for real data.")
         return create_synthetic_data()
-
+    
     try:
-        # Load training data (local file only)
+        # Load training data
         data = pd.read_csv(dataset_paths["training"])
-
-        # If dataset doesn’t have a 'label' column but has 'attack_cat', create one
-        if 'label' not in data.columns and 'attack_cat' in data.columns:
-            data['label'] = data['attack_cat'].apply(lambda x: 0 if x == 'Normal' else 1)
-
-        # Features = all except label
-        features = data.columns.drop('label') if 'label' in data.columns else data.columns
+        
+        # Make sure the last column is treated as 'label'
+        if 'label' not in data.columns:
+            data.columns = list(data.columns[:-1]) + ['label']
+        
+        # Check if this is the real dataset
+        if data.shape[0] < 100:  # If the file is too small, it might be corrupted
+            st.warning("Downloaded file seems too small. Using synthetic data instead.")
+            return create_synthetic_data()
+            
+        features = data.columns.drop('label')
         return data, features
-
+        
     except Exception as e:
-        st.error(f"❌ Error loading dataset: {str(e)}")
+        st.error(f"Error loading dataset: {str(e)}")
+        # Fall back to synthetic data if real data fails
         return create_synthetic_data()
 
 # Fallback function if real data isn't available
@@ -128,7 +148,7 @@ if not all([SKLEARN_AVAILABLE, MATPLOTLIB_AVAILABLE, SEABORN_AVAILABLE, PLOTLY_A
     
     Or manually install them with:
     ```
-    pip install streamlit pandas numpy scikit-learn matplotlib seaborn plotly
+    pip install streamlit pandas numpy scikit-learn matplotlib seaborn plotly requests
     ```
     """)
     st.stop()
@@ -218,6 +238,7 @@ if streamer:
 st.sidebar.slider("Detection Sensitivity", 0.01, 0.3, 0.1, 0.01, key="sensitivity")
 st.sidebar.markdown("---")
 st.sidebar.info("**5G Threat Detection System**\n\nAI-powered security for cloud-native telecom infrastructure")
+
 # Main dashboard
 if streamer:
     col1, col2, col3, col4 = st.columns(4)
