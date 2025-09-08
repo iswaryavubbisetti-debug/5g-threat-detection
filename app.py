@@ -6,6 +6,7 @@ from urllib.request import urlretrieve
 from collections import deque
 import threading
 import time
+import requests
 
 # Try to import ML/plotting libraries with error handling
 try:
@@ -45,30 +46,28 @@ def setup_dataset():
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
     
-    # URLs for the dataset files
-    dataset_urls = {
-        "training": "https://cloudstor.aarnet.edu.au/plus/s/2DhnLGDdEECo4ys/download?path=%2F&files=UNSW-NB15_1.csv",
-        "testing": "https://cloudstor.aarnet.edu.au/plus/s/2DhnLGDdEECo4ys/download?path=%2F&files=UNSW-NB15_2.csv"
-    }
+    # Use a more reliable URL from GitHub
+    dataset_url = "https://github.com/tawabshakeel/UNSW-NB15/raw/master/UNSW-NB15_1.csv"
+    filename = "UNSW_NB15_training-set.csv"
+    filepath = os.path.join(data_dir, filename)
     
-    dataset_paths = {}
+    if not os.path.exists(filepath):
+        try:
+            with st.spinner('Downloading dataset... This may take a few minutes.'):
+                # Use a simpler approach with requests
+                import requests
+                response = requests.get(dataset_url)
+                response.raise_for_status()  # Check for HTTP errors
+                
+                with open(filepath, 'wb') as f:
+                    f.write(response.content)
+                st.success("Downloaded dataset successfully!")
+        except Exception as e:
+            st.error(f"Error downloading dataset: {str(e)}")
+            st.info("Please check your internet connection and try again.")
+            return None
     
-    for name, url in dataset_urls.items():
-        filename = f"UNSW_NB15_{name}-set.csv"
-        filepath = os.path.join(data_dir, filename)
-        
-        if not os.path.exists(filepath):
-            try:
-                with st.spinner(f'Downloading {name} dataset... This may take a few minutes.'):
-                    urlretrieve(url, filepath)
-                st.success(f"Downloaded {filename} successfully!")
-            except Exception as e:
-                st.error(f"Error downloading {filename}: {str(e)}")
-                return None
-        
-        dataset_paths[name] = filepath
-    
-    return dataset_paths
+    return {"training": filepath}
 
 # Load data function with download capability
 @st.cache_data
@@ -77,19 +76,24 @@ def load_real_data():
     dataset_paths = setup_dataset()
     
     if dataset_paths is None:
-        st.error("Failed to set up dataset. Please check your internet connection.")
-        return None, None
+        st.warning("Using synthetic data for demonstration. Click 'Retry Download' to try again.")
+        return create_synthetic_data()
     
     try:
         # Load training data
         data = pd.read_csv(dataset_paths["training"])
+        
+        # Check if this is the real dataset or if we need to use synthetic
+        if data.shape[0] < 100:  # If the file is too small, it might be corrupted
+            st.warning("Downloaded file seems too small. Using synthetic data instead.")
+            return create_synthetic_data()
+            
         features = data.columns.drop('label') if 'label' in data.columns else data.columns
         return data, features
     except Exception as e:
         st.error(f"Error loading dataset: {str(e)}")
         # Fall back to synthetic data if real data fails
         return create_synthetic_data()
-
 # Fallback function if real data isn't available
 def create_synthetic_data():
     st.warning("Using synthetic data for demonstration. Real dataset will be used when available.")
@@ -209,6 +213,13 @@ else:
 
 # Sidebar controls
 st.sidebar.header("Dashboard Controls")
+
+# Add a retry button at the top of the sidebar
+if st.sidebar.button("🔄 Retry Download", help="Click if dataset download failed"):
+    # Clear cache to force redownload
+    st.cache_data.clear()
+    st.rerun()
+
 if streamer:
     if st.sidebar.button("▶️ Start Monitoring", key="start_btn"):
         streamer.start_streaming()
@@ -219,7 +230,6 @@ if streamer:
 st.sidebar.slider("Detection Sensitivity", 0.01, 0.3, 0.1, 0.01, key="sensitivity")
 st.sidebar.markdown("---")
 st.sidebar.info("**5G Threat Detection System**\n\nAI-powered security for cloud-native telecom infrastructure")
-
 # Main dashboard
 if streamer:
     col1, col2, col3, col4 = st.columns(4)
