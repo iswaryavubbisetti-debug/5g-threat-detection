@@ -44,15 +44,11 @@ except ImportError:
 # ===== DATASET SETUP FUNCTION =====
 def setup_dataset():
     data_dir = "data"
-    if not os.path.exists(data_dir):
-        os.makedirs(data_dir)
-
-    # Point directly to your local file
-    filename = "UNSW_NB15_training-set.csv"
+    filename = "UNSW-NB15_1.csv"   # use your actual file name
     filepath = os.path.join(data_dir, filename)
 
     if not os.path.exists(filepath):
-        st.error(f"Dataset file not found at {filepath}. Please put UNSW_NB15_training-set.csv inside the 'data' folder.")
+        st.error(f"Dataset file not found at {filepath}. Please put UNSW-NB15_1.csv inside the 'data' folder.")
         return None
 
     return {"training": filepath}
