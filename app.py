@@ -41,33 +41,22 @@ except ImportError:
     st.error("Plotly is not installed. Please install it with: pip install plotly")
 
 # ===== DATASET DOWNLOAD FUNCTION =====
+# ===== DATASET SETUP FUNCTION =====
 def setup_dataset():
     data_dir = "data"
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
-    
-    # Use a more reliable URL from GitHub
-    dataset_url = "https://github.com/tawabshakeel/UNSW-NB15/raw/master/UNSW-NB15_1.csv"
+
+    # Point directly to your local file
     filename = "UNSW_NB15_training-set.csv"
     filepath = os.path.join(data_dir, filename)
-    
+
     if not os.path.exists(filepath):
-        try:
-            with st.spinner('Downloading dataset... This may take a few minutes.'):
-                # Use a simpler approach with requests
-                import requests
-                response = requests.get(dataset_url)
-                response.raise_for_status()  # Check for HTTP errors
-                
-                with open(filepath, 'wb') as f:
-                    f.write(response.content)
-                st.success("Downloaded dataset successfully!")
-        except Exception as e:
-            st.error(f"Error downloading dataset: {str(e)}")
-            st.info("Please check your internet connection and try again.")
-            return None
-    
+        st.error(f"Dataset file not found at {filepath}. Please put UNSW_NB15_training-set.csv inside the 'data' folder.")
+        return None
+
     return {"training": filepath}
+
 
 # Load data function with download capability
 @st.cache_data
