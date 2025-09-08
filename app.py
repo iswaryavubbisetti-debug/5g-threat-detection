@@ -1,19 +1,43 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, classification_report
-import matplotlib.pyplot as plt
-import seaborn as sns
 import os
 from urllib.request import urlretrieve
-from sklearn.preprocessing import StandardScaler
-from sklearn.ensemble import IsolationForest
 from collections import deque
 import threading
 import time
-import plotly.express as px
+
+# Try to import ML/plotting libraries with error handling
+try:
+    from sklearn.model_selection import train_test_split
+    from sklearn.ensemble import RandomForestClassifier, IsolationForest
+    from sklearn.metrics import accuracy_score, classification_report
+    from sklearn.preprocessing import StandardScaler
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+    st.error("Scikit-learn is not installed. Please install it with: pip install scikit-learn")
+
+try:
+    import matplotlib.pyplot as plt
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
+    st.error("Matplotlib is not installed. Please install it with: pip install matplotlib")
+
+try:
+    import seaborn as sns
+    SEABORN_AVAILABLE = True
+except ImportError:
+    SEABORN_AVAILABLE = False
+    st.error("Seaborn is not installed. Please install it with: pip install seaborn")
+
+try:
+    import plotly.express as px
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+    st.error("Plotly is not installed. Please install it with: pip install plotly")
 
 # ===== DATASET DOWNLOAD FUNCTION =====
 def setup_dataset():
@@ -100,7 +124,24 @@ st.set_page_config(
 st.title("🛡️ 5G AI Threat Detection Dashboard")
 st.markdown("### Real-time Security Monitoring for Cloud-Native Telecom Infrastructure")
 
-# Load data - THIS IS THE FIXED PART
+# Check if all required packages are installed
+if not all([SKLEARN_AVAILABLE, MATPLOTLIB_AVAILABLE, SEABORN_AVAILABLE, PLOTLY_AVAILABLE]):
+    st.error("""
+    **Missing required packages!**
+    
+    Please install all required packages using:
+    ```
+    pip install -r requirements.txt
+    ```
+    
+    Or manually install them with:
+    ```
+    pip install streamlit pandas numpy scikit-learn matplotlib seaborn plotly
+    ```
+    """)
+    st.stop()
+
+# Load data
 df, features = load_real_data()
 
 if df is not None:
