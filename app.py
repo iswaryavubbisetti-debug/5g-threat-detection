@@ -31,11 +31,17 @@ def generate_synthetic_data():
     data = np.random.rand(100, 10)
     return pd.DataFrame(data, columns=[f"feature_{i}" for i in range(10)])
 
-file_path = os.path.join("data", "UNSW-NB15-1-small.csv")
+# Local dataset path (adjust if needed)
+file_path = os.path.join("data", "UNSW-NB15_small.csv")
 
-if os.path.exists(file_path):
+uploaded_file = st.file_uploader("Upload UNSW-NB15 dataset", type=["csv"])
+
+if uploaded_file is not None:
+    df = pd.read_csv(uploaded_file)
+    st.success("✅ Loaded dataset from uploaded file.")
+elif os.path.exists(file_path):
     df = pd.read_csv(file_path)
-    st.success("✅ Loaded real UNSW-NB15 dataset (sampled).")
+    st.success("✅ Loaded dataset from local path.")
 else:
     st.warning("⚠️ Dataset not found, using synthetic data instead.")
     df = generate_synthetic_data()
