@@ -1,24 +1,74 @@
+import streamlit as st
 import pandas as pd
 import numpy as np
-import streamlit as st
-import plotly.express as px
-from sklearn.ensemble import IsolationForest
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os
+from urllib.request import urlretrieve
 from sklearn.preprocessing import StandardScaler
-import time
+from sklearn.ensemble import IsolationForest
 from collections import deque
 import threading
+import time
+import plotly.express as px
 
-# Page config
-st.set_page_config(page_title="5G Threat Detection", layout="wide")
+# ===== DATASET DOWNLOAD FUNCTION =====
+def setup_dataset():
+    data_dir = "data"
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+    
+    # URLs for the dataset files
+    dataset_urls = {
+        "training": "https://cloudstor.aarnet.edu.au/plus/s/2DhnLGDdEECo4ys/download?path=%2F&files=UNSW-NB15_1.csv",
+        "testing": "https://cloudstor.aarnet.edu.au/plus/s/2DhnLGDdEECo4ys/download?path=%2F&files=UNSW-NB15_2.csv"
+    }
+    
+    dataset_paths = {}
+    
+    for name, url in dataset_urls.items():
+        filename = f"UNSW_NB15_{name}-set.csv"
+        filepath = os.path.join(data_dir, filename)
+        
+        if not os.path.exists(filepath):
+            try:
+                with st.spinner(f'Downloading {name} dataset... This may take a few minutes.'):
+                    urlretrieve(url, filepath)
+                st.success(f"Downloaded {filename} successfully!")
+            except Exception as e:
+                st.error(f"Error downloading {filename}: {str(e)}")
+                return None
+        
+        dataset_paths[name] = filepath
+    
+    return dataset_paths
 
-# Title
-st.title("🛡️ 5G AI Threat Detection Dashboard")
-st.markdown("### Real-time Security Monitoring for Cloud-Native Telecom Infrastructure")
-
-# Load data
+# Load data function with download capability
 @st.cache_data
-def load_data():
-    # Create realistic 5G network data
+def load_real_data():
+    # Setup dataset (download if needed)
+    dataset_paths = setup_dataset()
+    
+    if dataset_paths is None:
+        st.error("Failed to set up dataset. Please check your internet connection.")
+        return None, None
+    
+    try:
+        # Load training data
+        data = pd.read_csv(dataset_paths["training"])
+        features = data.columns.drop('label') if 'label' in data.columns else data.columns
+        return data, features
+    except Exception as e:
+        st.error(f"Error loading dataset: {str(e)}")
+        # Fall back to synthetic data if real data fails
+        return create_synthetic_data()
+
+# Fallback function if real data isn't available
+def create_synthetic_data():
+    st.warning("Using synthetic data for demonstration. Real dataset will be used when available.")
     np.random.seed(42)
     n_samples = 1000
     
@@ -37,18 +87,40 @@ def load_data():
     }
     df = pd.DataFrame(synthetic_data)
     return df, list(synthetic_data.keys())[:-1]
+# ===== END OF DATASET DOWNLOAD CODE =====
 
-df, features = load_data()
-X = df[features]
-y = df['label'].values
+# Set page config
+st.set_page_config(
+    page_title="5G AI Threat Detection",
+    page_icon="📡",
+    layout="wide"
+)
 
-# Preprocess
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
+# Title
+st.title("🛡️ 5G AI Threat Detection Dashboard")
+st.markdown("### Real-time Security Monitoring for Cloud-Native Telecom Infrastructure")
 
-# Train model
-model = IsolationForest(contamination=0.1, random_state=42, n_estimators=100)
-model.fit(X_scaled[y == 0])
+# Load data - THIS IS THE FIXED PART
+df, features = load_real_data()
+
+if df is not None:
+    # Check if we have a label column
+    if 'label' in df.columns:
+        X = df[features]
+        y = df['label'].values
+    else:
+        # If no label column, create a synthetic one for demonstration
+        st.warning("No label column found. Using synthetic labels for demonstration.")
+        X = df
+        y = np.random.choice([0, 1], len(df), p=[0.9, 0.1])
+    
+    # Preprocess
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    # Train model
+    model = IsolationForest(contamination=0.1, random_state=42, n_estimators=100)
+    model.fit(X_scaled[y == 0]) if len(np.unique(y)) > 1 else model.fit(X_scaled)
 
 # Data streamer class
 class DataStreamer:
@@ -88,66 +160,74 @@ class DataStreamer:
             time.sleep(0.2)
 
 # Initialize streamer
-streamer = DataStreamer(X_scaled, model)
+if df is not None:
+    streamer = DataStreamer(X_scaled, model)
+else:
+    st.error("Failed to load data. Please check your internet connection and try again.")
+    streamer = None
 
 # Sidebar controls
 st.sidebar.header("Dashboard Controls")
-if st.sidebar.button("▶️ Start Monitoring", key="start_btn"):
-    streamer.start_streaming()
-    
-if st.sidebar.button("⏹️ Stop Monitoring", key="stop_btn"):
-    streamer.is_streaming = False
+if streamer:
+    if st.sidebar.button("▶️ Start Monitoring", key="start_btn"):
+        streamer.start_streaming()
+        
+    if st.sidebar.button("⏹️ Stop Monitoring", key="stop_btn"):
+        streamer.is_streaming = False
 
 st.sidebar.slider("Detection Sensitivity", 0.01, 0.3, 0.1, 0.01, key="sensitivity")
 st.sidebar.markdown("---")
 st.sidebar.info("**5G Threat Detection System**\n\nAI-powered security for cloud-native telecom infrastructure")
 
 # Main dashboard
-col1, col2, col3, col4 = st.columns(4)
+if streamer:
+    col1, col2, col3, col4 = st.columns(4)
 
-with col1:
-    st.metric("Total Packets", streamer.current_index)
-    
-with col2:
-    st.metric("Threats Detected", streamer.threat_count)
-    
-with col3:
-    threat_rate = (streamer.threat_count / streamer.current_index * 100) if streamer.current_index > 0 else 0
-    st.metric("Threat Rate", f"{threat_rate:.1f}%")
-    
-with col4:
-    status = "ACTIVE 🟢" if streamer.is_streaming else "IDLE 🔴"
-    st.metric("System Status", status)
+    with col1:
+        st.metric("Total Packets", streamer.current_index)
+        
+    with col2:
+        st.metric("Threats Detected", streamer.threat_count)
+        
+    with col3:
+        threat_rate = (streamer.threat_count / streamer.current_index * 100) if streamer.current_index > 0 else 0
+        st.metric("Threat Rate", f"{threat_rate:.1f}%")
+        
+    with col4:
+        status = "ACTIVE 🟢" if streamer.is_streaming else "IDLE 🔴"
+        st.metric("System Status", status)
 
-# Live charts
-if streamer.packet_history:
-    chart_data = pd.DataFrame(streamer.packet_history)
-    
-    fig = px.scatter(chart_data, x='time', y='size', color='is_threat',
-                    color_discrete_map={True: 'red', False: 'blue'},
-                    title="Live 5G Traffic Monitoring",
-                    labels={'time': 'Packet Sequence', 'size': 'Packet Size (bytes)'})
-    st.plotly_chart(fig, use_container_width=True)
+    # Live charts
+    if streamer.packet_history:
+        chart_data = pd.DataFrame(streamer.packet_history)
+        
+        fig = px.scatter(chart_data, x='time', y='size', color='is_threat',
+                        color_discrete_map={True: 'red', False: 'blue'},
+                        title="Live 5G Traffic Monitoring",
+                        labels={'time': 'Packet Sequence', 'size': 'Packet Size (bytes)'})
+        st.plotly_chart(fig, use_container_width=True)
 
-# Alert section
-st.subheader("🔴 Real-time Security Alerts")
-alert_container = st.container()
+    # Alert section
+    st.subheader("🔴 Real-time Security Alerts")
+    alert_container = st.container()
 
-with alert_container:
-    for alert in streamer.alerts:
-        st.error(alert)
-    
-    if not streamer.alerts:
-        st.info("No threats detected. Monitoring in progress...")
+    with alert_container:
+        for alert in streamer.alerts:
+            st.error(alert)
+        
+        if not streamer.alerts:
+            st.info("No threats detected. Monitoring in progress...")
 
-# Response actions
-st.subheader("🛡️ Automated Response Actions")
-if streamer.threat_count > 0:
-    st.success("✅ Malicious IPs automatically blocked")
-    st.success("✅ Traffic rerouted to secure zones")
-    st.success("✅ SOC team notified in real-time")
+    # Response actions
+    st.subheader("🛡️ Automated Response Actions")
+    if streamer.threat_count > 0:
+        st.success("✅ Malicious IPs automatically blocked")
+        st.success("✅ Traffic rerouted to secure zones")
+        st.success("✅ SOC team notified in real-time")
+    else:
+        st.info("No response actions required")
 else:
-    st.info("No response actions required")
+    st.error("System initialization failed. Unable to start monitoring.")
 
 # Footer
 st.markdown("---")
